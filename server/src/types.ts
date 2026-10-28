@@ -1,0 +1,4 @@
+export type Suspect = { id:string; name:string; age?:string; occupation:string; biography:string; relationship:string; motive:string; alibi:string; actualWhereabouts?:string; suspiciousBehavior?:string; privateInvolvement?:string; isCulprit?:boolean };
+export type Evidence = { id:string; type:string; title:string; description:string; timestamp?:string; suspectIds?:string[]; eventIds?:string[]; details?:Record<string,unknown>; significance?:string };
+export type TimelineEvent = { id?:string; time:string; event:string; suspectIds?:string[] };
+export type MysteryContent = { title:string; category:string; difficulty:string; introduction:string; suspects:Suspect[]; evidence:Evidence[]; timeline:TimelineEvent[]; canonicalTruth:{culpritId:string;motive:string;method:string;sequence:string[];explanation:string;decisiveClues:string[];misleadingClues:string[];alternatives:string[]} };
