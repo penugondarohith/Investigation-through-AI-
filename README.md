@@ -32,3 +32,7 @@ The API runs on port 5000. Generated content is fictional. The backend stores ca
 - `GET /api/mysteries/:id/results` returns the solution only after accusation.
 
 Generation requires a working Gemini API key and MongoDB connection. Failed or invalid generations are marked failed and are not playable.
+
+## Evidence room
+
+The investigation view includes searchable, filterable fictional evidence records, relationship links, a document-style viewer, chat transcripts, simulated CCTV frames, and clearly labeled illustrative scene artwork. Discovery timestamps and progress are saved in the existing MongoDB Attempt collection. The added timestamp array has a default value, so no database migration is required for existing cases. No new environment variables or media provider are required; image evidence is presented as a generated-style illustration and never as authentic forensic photography.

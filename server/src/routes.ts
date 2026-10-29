@@ -36,7 +36,7 @@ router.get('/mysteries/:id',wrap(async(req,res)=>{
 router.post('/mysteries/:id/evidence/:evidenceId/discover',wrap(async(req,res)=>{
   const evidenceId=routeParam(req.params.evidenceId);const mystery=await ownCase(routeParam(req.params.id),req.sessionId);if(!mystery||mystery.status!=='ready')return res.status(404).json({error:{code:'NOT_FOUND',message:'Playable case not found.'}});
   if(!mystery.evidence.some((item:{id:string})=>item.id===evidenceId))return res.status(404).json({error:{code:'EVIDENCE_NOT_FOUND',message:'Evidence not found.'}});
-  await Attempt.updateOne({caseId:mystery.caseId,ownerSession:req.sessionId,accusation:null},{$addToSet:{discoveredEvidenceIds:evidenceId}});return res.json({success:true});
+  await Attempt.updateOne({caseId:mystery.caseId,ownerSession:req.sessionId,accusation:null,discoveredEvidenceIds:{$ne:evidenceId}},{$addToSet:{discoveredEvidenceIds:evidenceId,discoveredEvidence:{evidenceId,discoveredAt:new Date()}}});return res.json({success:true});
 }));
 router.post('/mysteries/:id/accusations',wrap(async(req,res)=>{
   const {suspectId}=accusationSchema.parse(req.body);const mystery=await ownCase(routeParam(req.params.id),req.sessionId);
