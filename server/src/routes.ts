@@ -35,7 +35,7 @@ router.post('/mysteries',rateLimit({windowMs:60*60_000,limit:8,standardHeaders:t
   const input=createSchema.parse(req.body);const caseId=randomUUID();
   const mystery=await Mystery.create({caseId,ownerSession:req.sessionId,status:'generating',settings:{difficulty:input.difficulty,category:input.category,length:input.length},scenario:input.scenario});
   await Attempt.create({caseId,ownerSession:req.sessionId});
-  void generateMystery(input).then(content=>Mystery.updateOne({caseId,ownerSession:req.sessionId,status:'generating'},{$set:{...content,status:'ready'}})).catch(async error=>{console.error('Mystery generation failed',error instanceof Error?error.message:'unknown error');await Mystery.updateOne({caseId},{$set:{status:'failed',failureMessage:'We could not prepare a valid case. Please create another mystery.'}})});
+  const generation=generateMystery(input).then(content=>Mystery.updateOne({caseId,ownerSession:req.sessionId,status:'generating'},{$set:{...content,status:'ready'}})).catch(async error=>{console.error('Mystery generation failed',error instanceof Error?error.message:'unknown error');await Mystery.updateOne({caseId},{$set:{status:'failed',failureMessage:'We could not prepare a valid case. Please create another mystery.'}})});const defer=req.app.locals.waitUntil as ((task:Promise<unknown>)=>void)|undefined;if(defer)defer(generation);else void generation;
   res.status(202).json({id:mystery.caseId,status:'generating'});
 }));
 router.get('/mysteries/:id',wrap(async(req,res)=>{

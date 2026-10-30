@@ -17,19 +17,21 @@ An interactive fictional mystery investigation app. Users create a case, inspect
 
 The API runs on port 5000. Generated content is fictional. The backend stores canonical truth privately and omits it from all pre-accusation responses. Image and CCTV evidence are represented as labeled text/simulations until a media provider is configured.
 
-## Production deployment
+## Production deployment on Vercel
 
-The frontend and Express API are separate applications. Deploy `client/` to Vercel as a Vite site and deploy `server/` to a Node.js host that supports a long-running Express service. A static Vercel frontend alone does not provide the `/api/*` backend routes.
+This repository includes a Vercel catch-all function for the existing Express API at `/api/*`; the API and Vite frontend can run on the same Vercel origin. In Vercel Project Settings, set the Root Directory to the repository root (not `client/`). `vercel.json` builds the workspaces and publishes `client/dist` while retaining the API function.
 
-Configure these server environment variables on the backend host:
+Add these variables in Vercel Project Settings → Environment Variables for Production (and Preview if needed):
 
-- `MONGODB_URI`: MongoDB connection string.
+- `MONGODB_URI`: MongoDB connection string. Allow Vercel's network access in the MongoDB provider if IP allowlisting is enabled.
 - `GEMINI_API_KEY`: Google Gemini API key.
 - `SESSION_SECRET`: random secret with at least 24 characters.
-- `CLIENT_URL`: exact HTTPS origin of the deployed frontend (no trailing slash).
+- `CLIENT_URL`: exact HTTPS origin of the deployed Vercel site (no trailing slash).
 - `NODE_ENV=production`.
 
-Set `VITE_API_URL` in Vercel to the backend origin, for example `https://your-api-host.example.com` (origin only, no `/api`). Redeploy the frontend after setting it. The backend enables credentialed CORS for `CLIENT_URL`; production session cookies require HTTPS. `client/.env.example` documents the frontend setting. For local development, leave `VITE_API_URL` blank so the Vite proxy continues to forward `/api` to `localhost:5000`.
+Leave `VITE_API_URL` unset or blank for this same-origin setup, then redeploy. Do not paste secrets into source files or `client/.env.example`. In Vercel, `/api/health` should return JSON with `database: "connected"`; HTML means the API function did not deploy, usually because the Vercel Root Directory is still set to `client/`.
+
+For local development, leave `VITE_API_URL` blank so the Vite proxy forwards `/api` to the local server on port 5000. `client/.env.example` documents the optional frontend override for a separately hosted backend.
 
 ## Project layout
 
