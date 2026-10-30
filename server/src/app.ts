@@ -9,8 +9,8 @@ import { config } from './config.js';
 import { connectDatabase } from './db.js';
 import { router } from './routes.js';
 declare global { namespace Express { interface Request { sessionId:string } } }
-const app=express();app.disable('x-powered-by');app.set('trust proxy',1);app.use(helmet({crossOriginResourcePolicy:{policy:'cross-origin'}}));app.use(cors({origin:config.CLIENT_URL,credentials:true}));app.use(express.json({limit:'1mb'}));app.use(cookieParser(config.SESSION_SECRET));
-app.use((req,res,next)=>{let sessionId=req.signedCookies['mystery.sid'] as string|undefined;if(!sessionId||sessionId.length>100){sessionId=randomUUID();res.cookie('mystery.sid',sessionId,{signed:true,httpOnly:true,secure:config.NODE_ENV==='production',sameSite:config.NODE_ENV==='production'?'none':'lax',maxAge:1000*60*60*24*30,path:'/'});}req.sessionId=sessionId;next();});
+const app=express();app.disable('x-powered-by');app.set('trust proxy',1);app.use(helmet({crossOriginResourcePolicy:{policy:'cross-origin'}}));app.use(cors({origin:config.CLIENT_URL,credentials:true}));app.use(express.json({limit:'1mb'}));const parseCookies=cookieParser(config.SESSION_SECRET);app.use((req,res,next)=>{const requestWithCookies=req as any;delete requestWithCookies.cookies;delete requestWithCookies.signedCookies;return parseCookies(req,res,next)});
+app.use((req,res,next)=>{let sessionId=(req.signedCookies??{})['mystery.sid'] as string|undefined;if(!sessionId||sessionId.length>100){sessionId=randomUUID();res.cookie('mystery.sid',sessionId,{signed:true,httpOnly:true,secure:config.NODE_ENV==='production',sameSite:config.NODE_ENV==='production'?'none':'lax',maxAge:1000*60*60*24*30,path:'/'});}req.sessionId=sessionId;next();});
 app.get('/api/health',async(_req,res)=>{try{await connectDatabase();return res.json({status:'ok',database:'connected'})}catch{return res.status(503).json({status:'unavailable',database:'disconnected'})}});
 app.use('/api',rateLimit({windowMs:60_000,limit:60,standardHeaders:true,legacyHeaders:false}));
 app.use('/api',(_req,_res,next)=>{void connectDatabase().then(()=>next()).catch(next)});
