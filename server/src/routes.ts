@@ -32,7 +32,7 @@ router.get('/mysteries',wrap(async(req,res)=>{
 }));
 router.post('/mysteries',rateLimit({windowMs:60*60_000,limit:8,standardHeaders:true,legacyHeaders:false}),wrap(async(req,res)=>{
   if(!config.GEMINI_API_KEY)return res.status(503).json({error:{code:'AI_NOT_CONFIGURED',message:'Add GEMINI_API_KEY to the project .env file, then restart the backend.'}});
-  const input=createSchema.parse(req.body);const caseId=randomUUID();
+  const parsedInput=createSchema.parse(req.body);const input={scenario:parsedInput.scenario??'',difficulty:parsedInput.difficulty??'Medium',category:parsedInput.category??'General mystery',length:parsedInput.length??'Standard',evidenceTypes:parsedInput.evidenceTypes??[]};const caseId=randomUUID();
   const mystery=await Mystery.create({caseId,ownerSession:req.sessionId,status:'generating',settings:{difficulty:input.difficulty,category:input.category,length:input.length},scenario:input.scenario});
   await Attempt.create({caseId,ownerSession:req.sessionId});
   const generation=generateMystery(input).then(content=>Mystery.updateOne({caseId,ownerSession:req.sessionId,status:'generating'},{$set:{...content,status:'ready'}})).catch(async error=>{console.error('Mystery generation failed',error instanceof Error?error.message:'unknown error');await Mystery.updateOne({caseId},{$set:{status:'failed',failureMessage:'We could not prepare a valid case. Please create another mystery.'}})});const defer=req.app.locals.waitUntil as ((task:Promise<unknown>)=>void)|undefined;if(defer)defer(generation);else void generation;
