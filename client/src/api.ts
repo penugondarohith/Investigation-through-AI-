@@ -1,9 +1,10 @@
 import type { CaseFile, InterrogationAssist, InterrogationState, InterrogationTurn, Result, VerdictSettings, VerdictSubmission } from './types';
 import type { BoardAnalysis, BoardState } from './board-model';
+const API_BASE_URL=(import.meta.env.VITE_API_URL??'').trim().replace(/\/+$/,'');
 const request = async <T,>(url: string, init?: RequestInit): Promise<T> => {
   let response: Response;
   try {
-    response = await fetch(url, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } });
+    response = await fetch(`${API_BASE_URL}${url}`, { credentials: 'include', ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } });
   } catch {
     throw new Error('Could not reach the API. Start the backend server and try again.');
   }
@@ -13,6 +14,7 @@ const request = async <T,>(url: string, init?: RequestInit): Promise<T> => {
   try {
     data = body ? JSON.parse(body) as T : {};
   } catch {
+    if(response.status===404&&response.headers.get('content-type')?.includes('text/html'))throw new Error('The API endpoint was not found. Deploy the backend and set VITE_API_URL in the frontend deployment to the backend origin, then redeploy.');
     throw new Error(`The API returned an unreadable response (${response.status}). Check that the backend is running and its logs for errors.`);
   }
   if (!response.ok) {

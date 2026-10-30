@@ -17,6 +17,20 @@ An interactive fictional mystery investigation app. Users create a case, inspect
 
 The API runs on port 5000. Generated content is fictional. The backend stores canonical truth privately and omits it from all pre-accusation responses. Image and CCTV evidence are represented as labeled text/simulations until a media provider is configured.
 
+## Production deployment
+
+The frontend and Express API are separate applications. Deploy `client/` to Vercel as a Vite site and deploy `server/` to a Node.js host that supports a long-running Express service. A static Vercel frontend alone does not provide the `/api/*` backend routes.
+
+Configure these server environment variables on the backend host:
+
+- `MONGODB_URI`: MongoDB connection string.
+- `GEMINI_API_KEY`: Google Gemini API key.
+- `SESSION_SECRET`: random secret with at least 24 characters.
+- `CLIENT_URL`: exact HTTPS origin of the deployed frontend (no trailing slash).
+- `NODE_ENV=production`.
+
+Set `VITE_API_URL` in Vercel to the backend origin, for example `https://your-api-host.example.com` (origin only, no `/api`). Redeploy the frontend after setting it. The backend enables credentialed CORS for `CLIENT_URL`; production session cookies require HTTPS. `client/.env.example` documents the frontend setting. For local development, leave `VITE_API_URL` blank so the Vite proxy continues to forward `/api` to `localhost:5000`.
+
 ## Project layout
 
 - `client/`: React, Vite, TypeScript application.
