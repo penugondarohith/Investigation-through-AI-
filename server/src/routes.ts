@@ -7,18 +7,22 @@ import { Attempt, Mystery } from './models.js';
 import { generateMystery, serializePublic, serializeResult } from './generator.js';
 import { generateSuspectReply } from './interrogation.js';
 import { assistInterrogation, type InterviewAssistAction } from './interrogation-assistant.js';
+import { assessVerdictText } from './verdict-evaluator.js';
+import { calculateVerdict, CASE_VERSION, VERDICT_RUBRIC, VERDICT_RUBRIC_VERSION, validateVerdictReferences, type VerdictSubmission } from './verdict-logic.js';
 import { compactInterviewSummary, findContradictionEvidence, projectInterviewState } from './interrogation-logic.js';
 import { analyzeBoard } from './board-assistant.js';
 import { boardStateSchema, caseNodeTypeIndex, validateBoardState } from './board-logic.js';
 export const router=Router();
 const createSchema=z.object({scenario:z.string().trim().min(20).max(3000),difficulty:z.enum(['Easy','Medium','Hard','Expert']).default('Medium'),category:z.enum(['Theft','Murder mystery','Missing person','Corporate investigation','Historical mystery','Suspicious incident','General mystery']).default('General mystery'),length:z.enum(['Short','Standard','Extended']).default('Standard'),evidenceTypes:z.array(z.string()).max(8).default([])});
-const accusationSchema=z.object({suspectId:z.string().min(1).max(80)});
+const verdictSubmissionSchema=z.object({suspectId:z.string().min(1).max(80),motive:z.string().max(2000).default(''),method:z.string().max(2000).default(''),timelineEventIds:z.array(z.string().min(1).max(80)).max(40).default([]),supportingEvidenceIds:z.array(z.string().min(1).max(80)).max(60).default([]),contradictoryEvidenceIds:z.array(z.string().min(1).max(80)).max(60).default([]),alibiReasoning:z.string().max(2000).default(''),reasoning:z.string().max(5000)}).superRefine((value,ctx)=>{if(value.reasoning.trim().length<config.VERDICT_MIN_REASONING_CHARS)ctx.addIssue({code:z.ZodIssueCode.custom,message:`Add at least ${config.VERDICT_MIN_REASONING_CHARS} characters explaining how your evidence supports the accusation.`,path:['reasoning']})});
 const interviewSchema=z.object({question:z.string().trim().min(2).max(1000),evidenceIds:z.array(z.string().min(1).max(80)).max(5).default([])});
 const interviewAssistSchema=z.object({action:z.enum(['follow-up','review','compare'])});
 const interviewNotesSchema=z.object({notes:z.string().max(4000)});
 const wrap=(fn:(req:Request,res:Response,next:NextFunction)=>Promise<unknown>)=>(req:Request,res:Response,next:NextFunction)=>{void fn(req,res,next).catch(next)};
 const ownCase=(id:string,owner:string)=>Mystery.findOne({caseId:id,ownerSession:owner});
 const routeParam=(value:string|string[]|undefined):string=>Array.isArray(value)?value[0]??'':value??'';
+
+router.get('/verdict-rubric',(_req,res)=>res.json({weights:VERDICT_RUBRIC,version:VERDICT_RUBRIC_VERSION,minimumReasoningCharacters:config.VERDICT_MIN_REASONING_CHARS}));
 
 router.get('/mysteries',wrap(async(req,res)=>{
   const cases=await Mystery.find({ownerSession:req.sessionId,status:'ready'}).sort({createdAt:-1}).limit(50).select('caseId title category difficulty createdAt').lean();
@@ -92,16 +96,17 @@ router.post('/mysteries/:id/interrogations/:suspectId',rateLimit({windowMs:60_00
   const refreshed=await Attempt.findOne({caseId,ownerSession:req.sessionId});if(!refreshed)return res.status(404).json({error:{code:'NOT_FOUND',message:'Investigation attempt not found.'}});
   const latest=(refreshed.interrogations??[]).find((item:any)=>item.suspectId===suspectId);return res.json({turn:{...turn,askedAt:turn.askedAt.toISOString()},state:projectInterviewState(suspectId,latest)});
 }));
-router.post('/mysteries/:id/accusations',wrap(async(req,res)=>{
-  const {suspectId}=accusationSchema.parse(req.body);const mystery=await ownCase(routeParam(req.params.id),req.sessionId);
+router.post('/mysteries/:id/accusations',rateLimit({windowMs:60*60_000,limit:5,standardHeaders:true,legacyHeaders:false}),wrap(async(req,res)=>{
+  const submission=verdictSubmissionSchema.parse(req.body) as VerdictSubmission;const mystery=await ownCase(routeParam(req.params.id),req.sessionId);
   if(!mystery||mystery.status!=='ready')return res.status(404).json({error:{code:'NOT_FOUND',message:'Playable case not found.'}});
-  if(!mystery.suspects.some((suspect:{id:string})=>suspect.id===suspectId))return res.status(400).json({error:{code:'INVALID_SUSPECT',message:'Choose a suspect from this case.'}});
-  const attempt=await Attempt.findOneAndUpdate({caseId:mystery.caseId,ownerSession:req.sessionId,accusation:null},{$set:{selectedSuspectId:suspectId,accusation:{suspectId},accusedAt:new Date()}},{new:true});
-  if(!attempt)return res.status(409).json({error:{code:'ALREADY_ACCUSED',message:'An accusation has already been submitted for this case.'}});
-  return res.json(serializeResult(mystery,attempt));
+  const selectedSuspect=mystery.suspects.find((suspect:{id:string})=>suspect.id===submission.suspectId);if(!selectedSuspect)return res.status(400).json({error:{code:'INVALID_SUSPECT',message:'Choose a suspect from this case.'}});
+  const attempt=await Attempt.findOne({caseId:mystery.caseId,ownerSession:req.sessionId});if(!attempt)return res.status(404).json({error:{code:'NOT_FOUND',message:'Investigation attempt not found.'}});if(attempt.accusation)return res.status(409).json({error:{code:'ALREADY_ACCUSed',message:'A final verdict has already been submitted.'}});
+  const referenceError=validateVerdictReferences(submission,mystery,attempt.discoveredEvidenceIds??[]);if(referenceError)return res.status(referenceError.code==='EVIDENCE_NOT_DISCOVERED'?403:400).json({error:referenceError});
+  const truth=mystery.canonicalTruth;const discoveredEvidence=(mystery.evidence??[]).filter((item:any)=>(attempt.discoveredEvidenceIds??[]).includes(item.id));const assessment=await assessVerdictText({submission,truth,caseData:mystery,discoveredEvidence,culprit:selectedSuspect});const evaluation=calculateVerdict({submission,truth,caseData:mystery,assessment});const submittedAt=new Date();const result={...evaluation,selectedSuspect:selectedSuspect.name,submittedAt:submittedAt.toISOString(),caseVersion:truth.caseVersion??CASE_VERSION,rubricVersion:VERDICT_RUBRIC_VERSION};const verdict={submission,result,submittedAt,caseVersion:truth.caseVersion??CASE_VERSION,rubricVersion:VERDICT_RUBRIC_VERSION};
+  const saved=await Attempt.findOneAndUpdate({caseId:mystery.caseId,ownerSession:req.sessionId,accusation:null,verdict:null},{$set:{selectedSuspectId:submission.suspectId,accusation:{suspectId:submission.suspectId},accusedAt:submittedAt,verdict,verdictSubmittedAt:submittedAt}},{new:true});if(!saved)return res.status(409).json({error:{code:'ALREADY_ACCUSED',message:'A final verdict has already been submitted.'}});return res.json(result);
 }));
 router.get('/mysteries/:id/results',wrap(async(req,res)=>{
   const mystery=await ownCase(routeParam(req.params.id),req.sessionId);if(!mystery||mystery.status!=='ready')return res.status(404).json({error:{code:'NOT_FOUND',message:'Case not found.'}});
   const attempt=await Attempt.findOne({caseId:mystery.caseId,ownerSession:req.sessionId});if(!attempt?.accusation)return res.status(403).json({error:{code:'SOLUTION_LOCKED',message:'Submit your accusation before opening the solution.'}});
-  return res.json(serializeResult(mystery,attempt));
+  return res.json(attempt.verdict?.result??serializeResult(mystery,attempt));
 }));

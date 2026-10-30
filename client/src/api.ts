@@ -1,4 +1,4 @@
-import type { CaseFile, InterrogationAssist, InterrogationState, InterrogationTurn, Result } from './types';
+import type { CaseFile, InterrogationAssist, InterrogationState, InterrogationTurn, Result, VerdictSettings, VerdictSubmission } from './types';
 import type { BoardAnalysis, BoardState } from './board-model';
 const request = async <T,>(url: string, init?: RequestInit): Promise<T> => {
   let response: Response;
@@ -26,7 +26,8 @@ export const createMystery = (input: Record<string, unknown>) => request<{ id: s
 export const getMystery = (id: string) => request<CaseFile>(`/api/mysteries/${id}`);
 export const getMysteries = () => request<{ cases: { id: string; title: string; category: string; difficulty: string; createdAt: string; accused: boolean }[] }>('/api/mysteries');
 export const discoverEvidence = (id: string, evidenceId: string) => request<{ success: boolean }>(`/api/mysteries/${id}/evidence/${evidenceId}/discover`, { method: 'POST' });
-export const accuse = (id: string, suspectId: string) => request<Result>(`/api/mysteries/${id}/accusations`, { method: 'POST', body: JSON.stringify({ suspectId }) });
+export const submitVerdict = (id:string,submission:VerdictSubmission) => request<Result>(`/api/mysteries/${id}/accusations`,{method:'POST',body:JSON.stringify(submission)});
+export const getVerdictSettings=()=>request<VerdictSettings>('/api/verdict-rubric');
 export const getResults = (id: string) => request<Result>(`/api/mysteries/${id}/results`);
 export const getInterrogation = (id:string,suspectId:string) => request<InterrogationState>(`/api/mysteries/${id}/interrogations/${suspectId}`);
 export const askSuspect = (id:string,suspectId:string,question:string,evidenceIds:string[]) => request<{turn:InterrogationTurn;state:InterrogationState}>(`/api/mysteries/${id}/interrogations/${suspectId}`,{method:'POST',body:JSON.stringify({question,evidenceIds})});
