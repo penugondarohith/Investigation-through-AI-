@@ -36,3 +36,17 @@ Generation requires a working Gemini API key and MongoDB connection. Failed or i
 ## Evidence room
 
 The investigation view includes searchable, filterable fictional evidence records, relationship links, a document-style viewer, chat transcripts, simulated CCTV frames, and clearly labeled illustrative scene artwork. Discovery timestamps and progress are saved in the existing MongoDB Attempt collection. The added timestamp array has a default value, so no database migration is required for existing cases. No new environment variables or media provider are required; image evidence is presented as a generated-style illustration and never as authentic forensic photography.
+
+## Suspect interrogation
+
+Each generated suspect has a private, bounded knowledge profile (direct facts, beliefs, hearsay, unrelated secrets, and unknowns), personality, and established statements. Interrogation turns are stored per suspect in the existing MongoDB `Attempt` record. Only discovered evidence can be presented. The dialogue endpoint is owner-session scoped and never returns private knowledge or culprit flags. Gemini dialogue requires the existing `GEMINI_API_KEY`; invalid output falls back to a bounded in-character response. No new environment variables or migration are required.
+
+Run the focused dialogue safety tests with `npm --workspace server test`. They cover non-culprit confession rejection, source citation checks, contradiction mapping, knowledge limits, personality tone, and safe projection of persisted conversation state.
+
+Open a dedicated interview at `/mystery/:id/interrogation/:suspectId` from a suspect's case page. It supports natural-language questions, presenting discovered evidence, persistent private notes, contradiction/disclosure indicators, and optional AI follow-up, statement-review, and evidence-comparison actions. Assistance is owner scoped, rate limited, and receives public suspect details and discovered evidence only. Long chats send the last eight turns plus a bounded persisted summary. It uses the existing `GEMINI_API_KEY`; no new configuration or migration is needed.
+
+## Investigation board
+
+Each case has an interactive board at `/mystery/:id/board`. It creates nodes and established links from the case's actual suspects, evidence, referenced locations, and timeline. Players can move and connect nodes, add theories/questions/notes, assess and group items, search/filter, zoom/pan, undo/redo, and request optional AI suggestions. The board is saved on the existing MongoDB `Attempt` record and scoped to the case owner. The board API validates node and link references and regenerates official links from case data; player links and accepted AI suggestions remain visibly separate. AI analysis uses the existing `GEMINI_API_KEY`, only includes discovered evidence, and returns suggestions with evidence citations. No extra package, environment variable, or migration is needed.
+
+The board is built with React and SVG rather than an external graph library. Automated coverage currently exercises backend board validation and AI citation checks, but does not include browser-driven pointer/touch interaction or a live Gemini integration test.
